@@ -63,6 +63,7 @@ services:
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - API_KEY=${COPILOT_API_KEY}
+      - MODEL_NAME=${MODEL_NAME}
     restart: unless-stopped
 
   # tools_webhook:

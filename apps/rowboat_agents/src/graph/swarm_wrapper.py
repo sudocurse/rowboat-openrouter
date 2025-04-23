@@ -1,3 +1,18 @@
+# lol so openrouter's api responses don't conform to the pydantic-ai models
+from pydantic import create_model
+import agents.models.openai_chatcompletions as openai_models
+
+OriginalResponseUsage = openai_models.ResponseUsage
+PatchedResponseUsage = create_model(
+    'ResponseUsage',
+    input_tokens=(int, ...),
+    output_tokens=(int, ...),
+    input_tokens_details=(dict | None, None),
+    __base__=OriginalResponseUsage
+)
+
+openai_models.ResponseUsage = PatchedResponseUsage
+
 import logging
 import json
 import aiohttp
@@ -13,7 +28,12 @@ from .helpers.instructions import (
     add_rag_instructions_to_agent
 )
 
-from agents import Agent as NewAgent, Runner, FunctionTool, RunContextWrapper, ModelSettings, WebSearchTool
+from agents import (Agent as NewAgent, Runner, FunctionTool,
+                    RunContextWrapper, ModelSettings, WebSearchTool,
+                    set_default_openai_client, set_default_openai_api,
+                    set_tracing_disabled
+                    )
+from agents import OpenAIProvider, RunConfig
 # Add import for OpenAI functionality
 from src.utils.common import common_logger as logger, generate_openai_output
 from typing import Any
@@ -21,7 +41,7 @@ from dataclasses import asdict
 import asyncio
 from mcp import ClientSession
 from mcp.client.sse import sse_client
-
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 from .tool_calling import call_rag_tool
@@ -245,13 +265,15 @@ def get_agents(agent_configs, tool_configs, complete_request):
 
         # add the name and description to the agent instructions
         agent_instructions = f"## Your Name\n{agent_config['name']}\n\n## Description\n{agent_config['description']}\n\n## Instructions\n{agent_config['instructions']}"
+
+        model = os.getenv("MODEL_NAME", agent_config["model"])
         try:
             new_agent = NewAgent(
                 name=agent_config["name"],
                 instructions=agent_instructions,
                 handoff_description=agent_config["description"],
                 tools=new_tools,
-                model=agent_config["model"],
+                model=model,
                 model_settings=ModelSettings(temperature=0.0)
             )
 
@@ -387,8 +409,15 @@ async def run_streamed(
     print("Beginning Swarm streaming run")
 
     try:
-        # Use the Runner.run_streamed method
-        stream_result = Runner.run_streamed(agent, formatted_messages)
+        API_KEY = os.getenv("OPENAI_API_KEY")
+        client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=API_KEY)
+
+        set_default_openai_client(client=client, use_for_tracing=False)
+        set_default_openai_api("chat_completions")
+        PROVIDER = OpenAIProvider(openai_client=client)
+        set_tracing_disabled(disabled=True)
+
+        stream_result = Runner.run_streamed(agent, formatted_messages, run_config=RunConfig(model_provider=PROVIDER))
         return stream_result
     except Exception as e:
         logger.error(f"Error during streaming run: {str(e)}")

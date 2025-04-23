@@ -4,9 +4,11 @@ from pydantic import BaseModel, ValidationError
 from typing import List, Dict, Any, Literal
 import json
 from lib import AgentContext, PromptContext, ToolContext, ChatContext
+import os
 
-openai_client = OpenAI()
-MODEL_NAME = "gpt-4.1"  # OpenAI model name
+openai_client = OpenAI(base_url="https://openrouter.ai/api/v1")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-4.1")
+
 
 class UserMessage(BaseModel):
     role: Literal["user"]
