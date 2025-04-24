@@ -191,9 +191,9 @@ export function ToolConfig({
         };
 
         const newRequired = [...(tool.parameters?.required || [])];
-        if (data.required) {
+        if (data.required && !newRequired.includes(name)) {
             newRequired.push(name);
-        } else {
+        } else if (!data.required) {
             newRequired.splice(newRequired.indexOf(name), 1);
         }
 
